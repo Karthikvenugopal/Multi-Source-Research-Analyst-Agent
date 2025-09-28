@@ -1,0 +1,162 @@
+import gradio as gr
+from graph import ResearchGraph
+from evaluation import ResearchEvaluator, check_research_quality, validate_research_output
+import time
+import json
+from datetime import datetime
+
+class ResearchApp:
+    def __init__(self):
+        self.research_graph = ResearchGraph()
+        self.evaluator = ResearchEvaluator()
+    
+    def research_query(self, question, progress=gr.Progress()):
+        """Process a research question and return the result with progress tracking"""
+        start_time = time.time()
+        
+        try:
+            progress(0.1, desc="Initializing research...")
+            
+            # Run the research graph
+            result = self.research_graph.run(question)
+            
+            progress(0.9, desc="Generating final report...")
+            end_time = time.time()
+            
+            # Calculate metrics
+            duration = round(end_time - start_time, 2)
+            result['duration'] = duration  # Add duration to result
+            
+            # Perform quality checks
+            quality_passed, quality_issues = check_research_quality(result)
+            validation_passed = validate_research_output(result)
+            
+            # Evaluate the research session
+            evaluation = self.evaluator.evaluate_research_session(result, question)
+            
+            # Get metrics
+            quality_score = result.get('research_quality_score', 0.0)
+            sources_used = result.get('sources_used', [])
+            iterations = result.get('iterations', 0)
+            
+            # Format the enhanced response
+            response = self._format_enhanced_report(question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues)
+            
+            progress(1.0, desc="Research complete!")
+            return response
+            
+        except Exception as e:
+            return f"❌ **Error processing your request:** {str(e)}"
+    
+    def _format_enhanced_report(self, question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues):
+        """Format the research report with enhanced styling"""
+        
+        # Quality status indicator
+        quality_status = "✅ PASSED" if quality_passed else "⚠️ ISSUES DETECTED"
+        quality_color = "🟢" if quality_passed else "🟡"
+        
+        # Header with metrics
+        response = f"""# 🔍 Multi-Source Research Report
+
+## 📊 Research Metrics
+- **⏱️ Duration:** {duration} seconds
+- **🔄 Iterations:** {iterations}
+- **📈 Quality Score:** {quality_score:.2f}/1.0
+- **📚 Sources Used:** {', '.join(sources_used) if sources_used else 'None'}
+- **🎯 Overall Score:** {evaluation['overall_score']:.2f}/1.0
+- **{quality_color} Quality Check:** {quality_status}
+- **🕐 Completed:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+"""
+        
+        # Add quality issues if any
+        if not quality_passed and quality_issues:
+            response += "## ⚠️ Quality Issues Detected\n"
+            for issue in quality_issues:
+                response += f"- {issue}\n"
+            response += "\n"
+        
+        response += "---\n\n"
+        response += f"## ❓ Research Question\n**{question}**\n\n---\n\n## 📋 Executive Summary\n"
+        
+        # Add the main report
+        if result.get('report'):
+            response += f"\n{result['report']}\n\n"
+        else:
+            response += "*No report generated.*\n\n"
+        
+        # Add research process details
+        response += "---\n\n## 🔬 Research Process Details\n\n"
+        
+        # Research findings with enhanced formatting
+        if result.get('research_findings'):
+            response += "### 📖 Research Findings\n\n"
+            for i, finding in enumerate(result['research_findings'], 1):
+                source = finding.get('source', 'unknown').upper()
+                title = finding.get('title', 'Untitled')
+                confidence = finding.get('confidence', 0.0)
+                url = finding.get('url', '')
+                
+                # Source emoji mapping
+                source_emoji = {
+                    'WEB': '🌐',
+                    'WIKIPEDIA': '📚',
+                    'ARXIV': '🔬'
+                }.get(source, '📄')
+                
+                response += f"**{i}. {source_emoji} {source}:** {title}\n"
+                response += f"   - **Confidence:** {confidence:.2f}/1.0\n"
+                if url:
+                    response += f"   - **URL:** [{url}]({url})\n"
+                response += f"   - **Content:** {finding.get('content', '')[:300]}...\n\n"
+        else:
+            response += "### 📖 Research Findings\n*No findings collected.*\n\n"
+        
+        # Analysis section
+        if result.get('analysis'):
+            response += "### 🧠 Analysis\n\n"
+            response += f"{result['analysis']}\n\n"
+        
+        # Footer
+        response += "---\n\n*Generated by Multi-Source Research Analyst Agent*"
+        
+        return response
+
+# Create the enhanced interface
+app = ResearchApp()
+
+# Define the interface with better styling
+iface = gr.Interface(
+    fn=app.research_query,
+    inputs=[
+        gr.Textbox(
+            label="🔍 Research Question", 
+            lines=3, 
+            placeholder="Enter your research question here...\n\nExamples:\n• What are the latest developments in quantum computing?\n• Compare renewable energy policies in different countries\n• What are the competing theories about dark matter?",
+            info="Ask any research question and the agent will gather information from multiple sources."
+        )
+    ],
+    outputs=gr.Markdown(label="📊 Research Report"),
+    title="🤖 Multi-Source Research Analyst Agent",
+    description="""
+    An intelligent AI agent that autonomously researches topics using multiple sources (web, Wikipedia, academic papers) 
+    and synthesizes comprehensive reports with citations and confidence scores.
+    
+    **Features:**
+    - 🔄 Autonomous decision-making and iterative research
+    - 📚 Multi-source information gathering
+    - 🧠 Intelligent synthesis of conflicting information
+    - 📊 Quality scoring and confidence metrics
+    - 📝 Professional report generation with citations
+    """,
+    theme=gr.themes.Soft(),
+    allow_flagging="never"
+)
+
+if __name__ == "__main__":
+    iface.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False,
+        show_error=True
+    )

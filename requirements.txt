@@ -1,0 +1,18 @@
+langchain
+langgraph
+tavily-python
+wikipedia-api
+arxiv
+python-dotenv
+gradio
+
+# Free LLM providers (choose one or more)
+langchain-huggingface
+transformers
+torch
+
+# Optional: Google Gemini (free with API key)
+langchain-google-genai
+
+# Optional: OpenAI (paid)
+langchain-openai
