@@ -77,8 +77,9 @@ class LLMManager:
             if not Config.GOOGLE_API_KEY:
                 raise ValueError("GOOGLE_API_KEY not found in environment")
             
-            # Use the correct model name for current API
-            model_name = "gemini-1.5-flash" if self.model == "gemini-pro" else self.model
+            # Migrate retired model aliases to a current model name
+            legacy_models = {"gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"}
+            model_name = "gemini-2.5-flash" if self.model in legacy_models else self.model
             
             print(f"🔍 Initializing Google Gemini model: {model_name}")
             llm = ChatGoogleGenerativeAI(
@@ -169,7 +170,8 @@ FREE_MODELS = {
         "facebook/blenderbot-90M"
     ],
     "google": [
-        "gemini-pro"  # Requires free API key
+        "gemini-2.5-flash",  # Requires free API key
+        "gemini-2.5-pro"
     ]
 }
 
@@ -184,10 +186,10 @@ def get_free_setup_instructions():
    - Set in .env: LLM_MODEL=microsoft/DialoGPT-medium
 
 2. 🔍 Google Gemini (Free with API Key):
-   - Get free API key: https://makersuite.google.com/app/apikey
+   - Get free API key: https://aistudio.google.com/apikey
    - Install: pip install langchain-google-genai
    - Set in .env: LLM_PROVIDER=google
-   - Set in .env: LLM_MODEL=gemini-pro
+   - Set in .env: LLM_MODEL=gemini-2.5-flash
    - Set in .env: GOOGLE_API_KEY=your_key_here
 
 3. 🤖 OpenAI (Paid):
