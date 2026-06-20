@@ -273,7 +273,8 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
         for i, finding in enumerate(findings, 1):
             source_info = f"[{finding['source'].upper()}] {finding.get('title', 'Untitled')}"
             confidence = finding.get('confidence', 0)
-            summary.append(f"{i}. {source_info} (Confidence: {confidence:.2f})\n   {finding['content'][:200]}...")
+            content = finding.get('content', '')
+            summary.append(f"{i}. {source_info} (Confidence: {confidence:.2f})\n   {content[:200]}...")
         
         return "\n\n".join(summary)
     
