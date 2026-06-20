@@ -1,0 +1,6 @@
+{"id": "q1", "category": "factual", "question": "What is retrieval-augmented generation and why is it used?"}
+{"id": "q2", "category": "technical", "question": "What are transformer neural networks and how does the self-attention mechanism work?"}
+{"id": "q3", "category": "comparative", "question": "How do solar and wind energy compare in terms of cost, reliability, and land use?"}
+{"id": "q4", "category": "scientific", "question": "What is CRISPR-Cas9 gene editing and what are its main applications and risks?"}
+{"id": "q5", "category": "current", "question": "What are the main approaches to reducing hallucinations in large language models?"}
+{"id": "q6", "category": "comparative", "question": "What are the trade-offs between nuclear power and renewables for decarbonizing electricity grids?"}
