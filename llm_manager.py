@@ -85,7 +85,8 @@ class LLMManager:
             llm = ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=Config.GOOGLE_API_KEY,
-                temperature=0.7
+                temperature=0.7,
+                max_retries=2,  # fail fast on rate limits instead of long backoff
             )
             print("✅ Google Gemini model loaded successfully")
             return llm
