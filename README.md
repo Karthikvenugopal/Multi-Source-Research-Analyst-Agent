@@ -11,6 +11,34 @@ An intelligent AI agent that autonomously researches topics using multiple sourc
 - **📝 Professional Reports**: Generates well-structured reports with proper citations
 - **🎯 Real-time Interface**: Beautiful Gradio interface with progress tracking
 
+## 📊 Evaluation (model-graded)
+
+Report quality is measured by an **LLM-as-judge** (`evals/judge.py`): a separate
+Gemini model grades each generated report against the evidence the agent actually
+retrieved, on three axes in `[0, 1]` — replacing guesswork with measurable scores.
+
+- **Faithfulness** — are the report's claims grounded in the retrieved evidence (not hallucinated)?
+- **Answer relevance** — does the report actually answer the question?
+- **Citation coverage** — are substantive claims attributed to a source?
+
+Reproduce with `python -m evals.run_eval` (questions in `datasets/eval_questions.jsonl`).
+
+_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions._
+_(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits; the default agent model is `gemini-2.5-flash`.)_
+
+| Question | Faithfulness | Relevance | Citations | Overall |
+| --- | :---: | :---: | :---: | :---: |
+| Factual — *what is RAG?* | 1.00 | 0.95 | 0.90 | **0.95** |
+| Technical — *transformers & self-attention* | 0.30 | 0.10 | 0.50 | **0.30** |
+| Comparative — *solar vs. wind energy* | 1.00 | 0.90 | 1.00 | **0.97** |
+| **Mean** | **0.77** | **0.65** | **0.80** | **0.74** |
+
+**What the eval surfaced:** the technical question scored poorly because the agent
+currently sends the *full natural-language question* as the search query to every
+source; for long questions this returns weak Wikipedia/ArXiv hits, so the report
+can't ground its answer. Per-source **query reformulation** is the next, eval-driven
+improvement.
+
 ## 🏗️ Architecture
 
 The agent is built using **LangGraph**, a framework for building stateful, multi-actor applications with LLMs. The architecture follows a cyclic "Reason → Act → Observe" pattern:
