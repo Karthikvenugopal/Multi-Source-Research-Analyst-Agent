@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     report: str  # The final, formatted answer
     iterations: Annotated[int, operator.add]  # Tracks how many loops it's done
     next_node: str  # The next node to execute
+    search_query: str  # Supervisor's reformulated query for the next search
     research_quality_score: float  # Overall quality of research (0-1)
     sources_used: List[str]  # Track which sources have been used
     max_iterations_reached: bool  # Safety flag

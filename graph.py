@@ -60,6 +60,7 @@ class ResearchGraph:
             "report": "",
             "iterations": 0,
             "next_node": "supervisor",
+            "search_query": "",
             "research_quality_score": 0.0,
             "sources_used": [],
             "max_iterations_reached": False,
