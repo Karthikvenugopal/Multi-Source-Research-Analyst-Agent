@@ -57,25 +57,28 @@ def test_supervisor_forces_synthesis_at_max_iterations(agent_nodes):
     assert out["max_iterations_reached"] is True
 
 
-def test_supervisor_parses_llm_decision(agent_nodes):
+def test_supervisor_returns_action_and_reformulated_query(agent_nodes):
+    from nodes import SupervisorDecision
+
     agent_nodes.tools.calculate_research_quality = Mock(return_value=0.5)
-    response = Mock()
-    response.content = "arxiv_search"
-    agent_nodes.llm.invoke = Mock(return_value=response)
+    agent_nodes.structured_supervisor.invoke = Mock(
+        return_value=SupervisorDecision(action="arxiv_search", search_query="rag retrieval")
+    )
 
     state = {
         "iterations": 1,
-        "research_findings": [{"source": "web", "confidence": 0.8}],
-        "question": "q",
+        "research_findings": [{"source": "web", "confidence": 0.8, "content": "x"}],
+        "question": "What is retrieval-augmented generation and why is it used?",
         "current_focus": "x",
     }
     out = agent_nodes.supervisor_node(state)
     assert out["next_node"] == "arxiv_search"
+    assert out["search_query"] == "rag retrieval"
 
 
-def test_supervisor_falls_back_on_llm_error(agent_nodes):
+def test_supervisor_falls_back_to_heuristic_on_error(agent_nodes):
     agent_nodes.tools.calculate_research_quality = Mock(return_value=0.5)
-    agent_nodes.llm.invoke = Mock(side_effect=RuntimeError("api down"))
+    agent_nodes.structured_supervisor.invoke = Mock(side_effect=RuntimeError("api down"))
 
     state = {
         "iterations": 1,
@@ -84,5 +87,39 @@ def test_supervisor_falls_back_on_llm_error(agent_nodes):
         "current_focus": "x",
     }
     out = agent_nodes.supervisor_node(state)
-    # On error the supervisor defaults to web_search rather than crashing.
+    # Heuristic fallback: low quality + no sources -> web_search; query is the question.
     assert out["next_node"] == "web_search"
+    assert out["search_query"] == "q"
+
+
+def test_search_node_uses_reformulated_query(agent_nodes):
+    captured = {}
+
+    def fake_web_search(query):
+        captured["query"] = query
+        return [{"source": "web", "confidence": 0.8, "content": "c"}]
+
+    agent_nodes.tools.web_search = fake_web_search
+    out = agent_nodes.web_search_node({
+        "search_query": "focused terms",
+        "question": "a very long natural-language question ...",
+        "research_findings": [],
+    })
+    assert captured["query"] == "focused terms"
+    assert out["next_node"] == "supervisor"
+
+
+def test_search_node_falls_back_to_question_when_no_query(agent_nodes):
+    captured = {}
+
+    def fake_wiki_search(query):
+        captured["query"] = query
+        return [{"source": "wikipedia", "confidence": 0.9, "content": "c"}]
+
+    agent_nodes.tools.wikipedia_search = fake_wiki_search
+    agent_nodes.wikipedia_search_node({
+        "search_query": "",
+        "question": "the original question",
+        "research_findings": [],
+    })
+    assert captured["query"] == "the original question"
