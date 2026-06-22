@@ -35,7 +35,7 @@ retrieved, on three axes in `[0, 1]`.
 
 Reproduce with `python -m evals.run_eval` (questions in `datasets/eval_questions.jsonl`).
 
-_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions._
+_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions · **baseline, before query reformulation**._
 _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits; the default agent model is `gemini-2.5-flash`.)_
 
 | Question | Faithfulness | Relevance | Citations | Overall |
@@ -48,8 +48,11 @@ _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits;
 **What the eval surfaced:** the technical question scored poorly because the agent
 currently sends the *full natural-language question* as the search query to every
 source; for long questions this returns weak Wikipedia/ArXiv hits, so the report
-can't ground its answer. Per-source **query reformulation** is the next, eval-driven
-improvement.
+can't ground its answer. This motivated **per-source query reformulation**, now
+implemented: the supervisor emits a concise, source-tailored query in one
+structured-output call (e.g. *"self-attention transformer architecture"* instead
+of the full sentence), which already restores web retrieval on that question. A
+clean re-scored before/after table is pending fresh free-tier quota.
 
 ## Architecture
 
@@ -112,8 +115,6 @@ needs no API keys or network and runs in CI on every push.
 
 ## Roadmap
 
-- **Query reformulation** — extract concise per-source search terms instead of
-  passing the whole question (the weakness the eval surfaced above).
 - **Parallel retrieval** — fetch sources concurrently to cut latency and LLM calls.
 - **Expanded eval set** — grow `datasets/` and report per-category scores.
 - **Hosted demo** — deploy to Hugging Face Spaces with a recorded walkthrough.
