@@ -11,14 +11,15 @@ a model-graded evaluation harness rather than asserted.
 
 ## Highlights
 
-- **Agentic control flow** — a supervisor node (LLM) repeatedly decides the next
-  action (search a source / synthesize / finish) in a Reason → Act → Observe loop,
-  with deterministic fallbacks so it never stalls.
+- **Plan-execute control flow** — a planner (LLM) chooses which sources to use and
+  a tailored query for each in one structured-output call; retrieval then runs in
+  **parallel**, followed by synthesis and report generation. ~3 LLM calls per
+  question, with a deterministic fallback so it never stalls.
 - **Multi-source retrieval** — web search (Tavily), Wikipedia, and ArXiv, each
   normalized into a common finding schema with source attribution.
 - **Measured, not asserted** — an LLM-as-judge scores every report on faithfulness,
   answer relevance, and citation coverage (see [Evaluation](#evaluation)).
-- **Tested and CI-gated** — 27 hermetic unit tests (no network or API keys) run on
+- **Tested and CI-gated** — 29 hermetic unit tests (no network or API keys) run on
   every push via GitHub Actions.
 - **Pluggable LLMs** — Google Gemini (default, free tier), OpenAI, or local
   HuggingFace models, selected by environment variable.
@@ -35,7 +36,7 @@ retrieved, on three axes in `[0, 1]`.
 
 Reproduce with `python -m evals.run_eval` (questions in `datasets/eval_questions.jsonl`).
 
-_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions · **baseline, before query reformulation**._
+_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions · **baseline, before the plan-execute redesign**._
 _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits; the default agent model is `gemini-2.5-flash`.)_
 
 | Question | Faithfulness | Relevance | Citations | Overall |
@@ -45,39 +46,38 @@ _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits;
 | Comparative — *solar vs. wind energy* | 1.00 | 0.90 | 1.00 | **0.97** |
 | **Mean** | **0.77** | **0.65** | **0.80** | **0.74** |
 
-**What the eval surfaced:** the technical question scored poorly because the agent
-currently sends the *full natural-language question* as the search query to every
-source; for long questions this returns weak Wikipedia/ArXiv hits, so the report
-can't ground its answer. This motivated **per-source query reformulation**, now
-implemented: the supervisor emits a concise, source-tailored query in one
-structured-output call (e.g. *"self-attention transformer architecture"* instead
-of the full sentence), which already restores web retrieval on that question. A
-clean re-scored before/after table is pending fresh free-tier quota.
+**What the eval surfaced:** the technical question scored poorly because the
+original agent sent the *full natural-language question* as the search query to
+every source; for long questions this returned weak Wikipedia/ArXiv hits, so the
+report couldn't ground its answer. This drove the **plan-execute redesign**
+below — a planner that emits a concise, source-tailored query per source (e.g.
+*"self-attention transformer architecture"*) and fetches sources in parallel
+(q2 now retrieves all three sources, including web). A clean re-scored table on
+the redesigned agent is pending fresh free-tier quota.
 
 ## Architecture
 
 ```
-          ┌──────────────┐   LLM decides the next action each loop
-          │  Supervisor  │◀──────────────────────┐
-          └──────┬───────┘                        │
-                 │ route                           │
-     ┌───────────┼────────────┐                   │
-     ▼           ▼            ▼                    │
- ┌────────┐ ┌──────────┐ ┌────────┐               │
- │  Web   │ │Wikipedia │ │ ArXiv  │  findings ─────┘
- │(Tavily)│ │          │ │        │
- └────────┘ └──────────┘ └────────┘
-                 │ enough / diverse evidence
-                 ▼
-          ┌──────────────┐      ┌──────────┐
-          │  Synthesize  │ ───▶ │  Report  │ ───▶ cited report
-          └──────────────┘      └──────────┘
+   ┌───────────┐   1 LLM call: choose sources + a tailored query for each
+   │  Planner  │
+   └─────┬─────┘
+         │ research plan
+         ▼
+   ┌───────────┐         ┌──────────────┐
+   │  Gather   │ ──────▶ │ Web (Tavily) │
+   │ (parallel │ ──────▶ │ Wikipedia    │ ──▶ findings
+   │  fetch)   │ ──────▶ │ ArXiv        │
+   └─────┬─────┘         └──────────────┘
+         ▼
+   ┌────────────┐      ┌──────────┐
+   │ Synthesize │ ───▶ │  Report  │ ──▶ cited report
+   └────────────┘      └──────────┘
 ```
 
 | Module | Responsibility |
 | --- | --- |
-| `graph.py` | LangGraph state graph: nodes, edges, routing |
-| `nodes.py` | Supervisor decision, per-source research, synthesis, report |
+| `graph.py` | LangGraph pipeline: planner → gather → synthesize → report |
+| `nodes.py` | Planner (sources + queries), parallel gather, synthesis, report |
 | `tools.py` | Tavily / Wikipedia / ArXiv retrieval → common finding schema |
 | `llm_manager.py` | Provider selection (Gemini / OpenAI / HuggingFace) |
 | `state.py` | Typed `AgentState` |
@@ -107,7 +107,7 @@ python app.py               # Gradio UI at http://localhost:7860
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                      # 27 unit tests, fully mocked, < 1s
+pytest                      # 29 unit tests, fully mocked, < 1s
 ```
 
 The suite mocks every external client (Tavily, Wikipedia, ArXiv, Gemini), so it
@@ -115,8 +115,8 @@ needs no API keys or network and runs in CI on every push.
 
 ## Roadmap
 
-- **Parallel retrieval** — fetch sources concurrently to cut latency and LLM calls.
 - **Expanded eval set** — grow `datasets/` and report per-category scores.
+- **Result caching** — cache retrieval/LLM calls to make eval runs cheaper and faster.
 - **Hosted demo** — deploy to Hugging Face Spaces with a recorded walkthrough.
 
 ## License
