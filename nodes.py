@@ -1,66 +1,69 @@
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Dict, Any, Literal
+
 from langchain.prompts import ChatPromptTemplate
-from config import Config
-from tools import ResearchTools
-from state import ResearchFinding
-from llm_manager import LLMManager
-from typing import List, Dict, Any, Literal, Tuple
 from pydantic import BaseModel, Field
 
+from config import Config
+from tools import ResearchTools
+from llm_manager import LLMManager
 
-class SupervisorDecision(BaseModel):
-    """Structured decision the supervisor returns on each loop."""
 
-    action: Literal[
-        "web_search", "wikipedia_search", "arxiv_search", "synthesize", "finish"
-    ] = Field(description="The next action to take.")
-    search_query: str = Field(
-        default="",
-        description=(
-            "If action is one of the *_search actions, a concise keyword/entity "
-            "query optimised for that source -- NOT the full natural-language "
-            "question. Leave empty for synthesize/finish."
-        ),
-    )
-    reasoning: str = Field(
-        default="", description="One short sentence justifying the choice."
+class PlannedSearch(BaseModel):
+    """A single source + the query to run against it."""
+
+    source: Literal["web", "wikipedia", "arxiv"]
+    query: str = Field(
+        description="Concise keyword/entity query for this source -- NOT the full "
+                    "natural-language question."
     )
 
 
-SUPERVISOR_SYSTEM = """You are an intelligent research supervisor. Given the current
-state of a research task, choose the single best next action.
+class ResearchPlan(BaseModel):
+    """The planner's decision: which sources to search and with what queries."""
 
-Available actions:
-- web_search       current news, recent developments, real-time data
-- wikipedia_search established facts, definitions, historical context
-- arxiv_search     academic papers, technical / scientific detail
-- synthesize       enough diverse evidence has been gathered to analyse it
-- finish           the research is already complete and comprehensive
+    searches: List[PlannedSearch] = Field(
+        description="One to three source+query searches to run for this question."
+    )
+    reasoning: str = Field(default="", description="One sentence on the choice of sources.")
 
-Guidance:
-- Prefer sources that have not been used yet to maximise source diversity.
-- If quality is low and few sources have been used, keep researching.
-- Once web, reference, and academic angles are covered, synthesize.
 
-When the action is a search, also produce `search_query`: a SHORT query of the key
-entities/terms for that source (for example "self-attention transformer
-architecture"), never the full question. Focused queries retrieve better evidence."""
+PLANNER_SYSTEM = """You are a research planner. Given a question, design a focused
+multi-source research plan: choose the sources that will best answer it and, for
+each, write a SHORT keyword query (key entities/terms, never the full sentence).
+
+Sources:
+- web        current events, recent developments, real-time data
+- wikipedia  established facts, definitions, background
+- arxiv      academic papers, technical / scientific detail
+
+Pick one to three sources. Prefer breadth across different source types for
+well-rounded research, and tune each query to its source (for example
+"self-attention transformer architecture" rather than "how does self-attention
+work?")."""
 
 
 class AgentNodes:
+    """Plan-execute research agent.
+
+    planner (1 LLM call -> sources + queries)
+      -> gather (parallel retrieval, no LLM calls)
+      -> synthesize (1 LLM call)
+      -> report (1 LLM call)
+    """
+
     def __init__(self):
         self.llm_manager = LLMManager()
         self.llm = self.llm_manager.llm
         self.tools = ResearchTools()
 
-        # Supervisor returns a structured decision (action + a source-tailored query)
-        # in a single call. Falls back to a heuristic if the provider/model does not
-        # support structured output.
+        # Planner returns a structured ResearchPlan in one call. Falls back to a
+        # default "all sources" plan if the provider lacks structured output.
         try:
-            self.structured_supervisor = self.llm.with_structured_output(SupervisorDecision)
+            self.planner = self.llm.with_structured_output(ResearchPlan)
         except Exception:
-            self.structured_supervisor = None
+            self.planner = None
 
-        # Synthesis and report prompts
         self.synthesis_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are an expert research analyst. Synthesize the following information into a comprehensive analysis.
 
@@ -126,98 +129,69 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
             ("human", "Please create the final research report.")
         ])
 
-    def supervisor_node(self, state):
-        """Decide the next action (and a tailored search query) from the current state."""
-        if state['iterations'] >= Config.MAX_ITERATIONS:
-            return {
-                "next_node": "synthesize",
-                "max_iterations_reached": True,
-                "iterations": 1,
-            }
+    # --- planning -----------------------------------------------------------
 
-        quality_score = self.tools.calculate_research_quality(state['research_findings'])
-        sources_used = list(set(f['source'] for f in state['research_findings']))
-        findings_summary = self._format_findings_summary(state['research_findings'])
+    def planner_node(self, state):
+        """Decide which sources to search and with what query (one LLM call)."""
+        plan = self._make_plan(state['question'])
+        return {"research_plan": plan, "next_node": "gather"}
 
-        next_node, search_query = self._decide_next_action(
-            state, quality_score, sources_used, findings_summary
-        )
-
-        return {
-            "next_node": next_node,
-            "search_query": search_query,
-            "iterations": 1,
-            "research_quality_score": quality_score,
-        }
-
-    def _decide_next_action(self, state, quality_score, sources_used, findings_summary) -> Tuple[str, str]:
-        """Return ``(next_node, search_query)``.
-
-        Uses the model's structured output when available, otherwise a deterministic
-        heuristic. Never raises.
-        """
-        context = (
-            f"Question: {state['question']}\n"
-            f"Current focus: {state.get('current_focus', 'General research')}\n"
-            f"Research quality score: {round(quality_score, 2)}/1.0\n"
-            f"Sources used: {', '.join(sources_used) if sources_used else 'None'}\n"
-            f"Iterations: {state['iterations']}/{Config.MAX_ITERATIONS}\n"
-            f"Findings so far:\n{findings_summary}\n\n"
-            "Choose the next action."
-        )
-
-        if self.structured_supervisor is not None:
+    def _make_plan(self, question: str) -> List[Dict[str, str]]:
+        if self.planner is not None:
             try:
-                decision = self.structured_supervisor.invoke(
-                    [("system", SUPERVISOR_SYSTEM), ("human", context)]
+                result = self.planner.invoke(
+                    [("system", PLANNER_SYSTEM),
+                     ("human", f"Question: {question}\n\nProduce the research plan.")]
                 )
-                query = (decision.search_query or "").strip() or state['question']
-                return decision.action, query
+                plan = [
+                    {"source": s.source, "query": (s.query or question).strip() or question}
+                    for s in result.searches
+                    if s.source in ("web", "wikipedia", "arxiv")
+                ]
+                if plan:
+                    return plan
             except Exception as e:
-                print(f"⚠️ Structured supervisor failed, using heuristic: {e}")
+                print(f"⚠️ Planner failed, using default plan: {e}")
 
-        # Deterministic fallback: gather missing sources, then synthesize.
-        return self._fallback_action(quality_score, sources_used), state['question']
+        # Default plan: query every source with the full question.
+        return [{"source": s, "query": question} for s in ("web", "wikipedia", "arxiv")]
 
-    @staticmethod
-    def _fallback_action(quality_score, sources_used) -> str:
-        if quality_score < 0.6 and 'web' not in sources_used:
-            return "web_search"
-        if 'wikipedia' not in sources_used:
-            return "wikipedia_search"
-        if 'arxiv' not in sources_used:
-            return "arxiv_search"
-        return "synthesize"
+    # --- retrieval ----------------------------------------------------------
 
-    def web_search_node(self, state):
-        """Perform web search (with the supervisor's query) and add to findings."""
-        results = self.tools.web_search(state.get('search_query') or state['question'])
-        new_findings = state['research_findings'] + results
-        return {
-            "research_findings": new_findings,
-            "next_node": "supervisor",
-            "sources_used": list(set(f['source'] for f in new_findings)),
+    def gather_node(self, state):
+        """Run every planned search concurrently and collect the findings."""
+        plan = state.get('research_plan') or [
+            {"source": s, "query": state['question']} for s in ("web", "wikipedia", "arxiv")
+        ]
+        tool_for = {
+            "web": self.tools.web_search,
+            "wikipedia": self.tools.wikipedia_search,
+            "arxiv": self.tools.arxiv_search,
         }
 
-    def wikipedia_search_node(self, state):
-        """Perform Wikipedia search (with the supervisor's query) and add to findings."""
-        results = self.tools.wikipedia_search(state.get('search_query') or state['question'])
-        new_findings = state['research_findings'] + results
+        def run_one(item):
+            fn = tool_for.get(item["source"])
+            if fn is None:
+                return []
+            try:
+                return fn(item.get("query") or state['question'])
+            except Exception as e:
+                print(f"⚠️ {item['source']} search failed: {e}")
+                return []
+
+        findings: List[Dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=max(1, len(plan))) as pool:
+            for results in pool.map(run_one, plan):
+                findings.extend(results)
+
         return {
-            "research_findings": new_findings,
-            "next_node": "supervisor",
-            "sources_used": list(set(f['source'] for f in new_findings)),
+            "research_findings": findings,
+            "sources_used": sorted({f["source"] for f in findings}),
+            "research_quality_score": self.tools.calculate_research_quality(findings),
+            "next_node": "synthesize",
         }
 
-    def arxiv_search_node(self, state):
-        """Perform ArXiv search (with the supervisor's query) and add to findings."""
-        results = self.tools.arxiv_search(state.get('search_query') or state['question'])
-        new_findings = state['research_findings'] + results
-        return {
-            "research_findings": new_findings,
-            "next_node": "supervisor",
-            "sources_used": list(set(f['source'] for f in new_findings)),
-        }
+    # --- synthesis & reporting ---------------------------------------------
 
     def synthesize_node(self, state):
         """Synthesize the findings into a single analysis."""
@@ -240,12 +214,10 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
             print(f"❌ Error in synthesis: {e}")
             analysis = f"Error in synthesis: {str(e)}"
 
-        confidence = self._calculate_synthesis_confidence(state['research_findings'])
-
         return {
             "analysis": analysis,
             "next_node": "report",
-            "research_quality_score": confidence,
+            "research_quality_score": self._calculate_synthesis_confidence(state['research_findings']),
         }
 
     def report_node(self, state):
@@ -270,6 +242,8 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
             print(f"❌ Error in report generation: {e}")
             report = f"Error in report generation: {str(e)}"
         return {"report": report, "next_node": "finish"}
+
+    # --- helpers ------------------------------------------------------------
 
     def _format_findings_summary(self, findings: List[Dict[str, Any]]) -> str:
         """Format findings for display in prompts."""
