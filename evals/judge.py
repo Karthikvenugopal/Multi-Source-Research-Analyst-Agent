@@ -84,6 +84,7 @@ class ReportJudge:
                 "GOOGLE_API_KEY is required to run the judge. Set it in your .env."
             )
         from langchain_google_genai import ChatGoogleGenerativeAI
+        from llm_manager import gemini_rate_limiter
 
         self.model = model or Config.LLM_MODEL
         self.evidence_char_limit = evidence_char_limit
@@ -91,7 +92,8 @@ class ReportJudge:
             model=self.model,
             google_api_key=Config.GOOGLE_API_KEY,
             temperature=0,
-            max_retries=2,  # fail fast on rate limits instead of long backoff
+            max_retries=0,  # rate limiter prevents 429s; retries would waste daily quota
+            rate_limiter=gemini_rate_limiter(self.model),
         )
         # Structured output guarantees we get parseable, in-range scores back.
         self._judge = llm.with_structured_output(JudgeVerdict)

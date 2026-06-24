@@ -6,6 +6,23 @@ Supports multiple free and paid LLM providers
 from typing import Optional, Dict, Any
 import os
 from config import Config
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+
+def gemini_rate_limiter(model: str) -> InMemoryRateLimiter:
+    """Token-bucket limiter that keeps us under Gemini free-tier per-minute caps.
+
+    Free tier is roughly 10 requests/min for flash-lite and 5 for flash; pace
+    safely under those so request bursts never trigger 429s (which, with retries,
+    would also burn through the daily quota).
+    """
+    per_minute = 8 if "flash-lite" in model else 4
+    return InMemoryRateLimiter(
+        requests_per_second=per_minute / 60.0,
+        check_every_n_seconds=0.5,
+        max_bucket_size=1,
+    )
+
 
 class LLMManager:
     """Manages different LLM providers with fallback options"""
@@ -86,7 +103,8 @@ class LLMManager:
                 model=model_name,
                 google_api_key=Config.GOOGLE_API_KEY,
                 temperature=0.7,
-                max_retries=2,  # fail fast on rate limits instead of long backoff
+                max_retries=0,  # rate limiter prevents 429s; retries would waste daily quota
+                rate_limiter=gemini_rate_limiter(model_name),
             )
             print("✅ Google Gemini model loaded successfully")
             return llm
