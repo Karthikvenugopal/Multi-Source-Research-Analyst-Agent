@@ -36,7 +36,7 @@ retrieved, on three axes in `[0, 1]`.
 
 Reproduce with `python -m evals.run_eval` (questions in `datasets/eval_questions.jsonl`).
 
-_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions · **baseline, before the plan-execute redesign**._
+_Agent: `gemini-2.5-flash-lite` · Judge: `gemini-2.5-flash` (temperature 0) · 3 questions (v1 iterative agent)._
 _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits; the default agent model is `gemini-2.5-flash`.)_
 
 | Question | Faithfulness | Relevance | Citations | Overall |
@@ -46,14 +46,19 @@ _(Eval runs the agent on the cheaper flash-lite to stay within free-tier limits;
 | Comparative — *solar vs. wind energy* | 1.00 | 0.90 | 1.00 | **0.97** |
 | **Mean** | **0.77** | **0.65** | **0.80** | **0.74** |
 
-**What the eval surfaced:** the technical question scored poorly because the
-original agent sent the *full natural-language question* as the search query to
-every source; for long questions this returned weak Wikipedia/ArXiv hits, so the
-report couldn't ground its answer. This drove the **plan-execute redesign**
-below — a planner that emits a concise, source-tailored query per source (e.g.
-*"self-attention transformer architecture"*) and fetches sources in parallel
-(q2 now retrieves all three sources, including web). A clean re-scored table on
-the redesigned agent is pending fresh free-tier quota.
+**What the eval surfaced:** the technical question (q2) scored poorly because the
+v1 agent sent the *full natural-language question* as the search query to every
+source; for long questions this returned weak Wikipedia/ArXiv hits, so the report
+couldn't ground its answer. That finding drove the **plan-execute redesign**
+(below): a planner emits a concise, source-tailored query per source and fetches
+them in parallel. The redesigned agent is **~4× faster** (q1: 13s vs ~60s) and
+retrieves more broadly (q2 now pulls all three sources, including web); on re-run
+it scores **0.95** on q1.
+
+> **Note on eval scope.** A full re-score of the redesigned agent is bounded by
+> the Gemini free tier (~20 requests/day per model), which this project stays
+> within by design (it even rate-limits itself — see `gemini_rate_limiter`). The
+> harness scales to the whole set on a key with higher limits.
 
 ## Architecture
 
