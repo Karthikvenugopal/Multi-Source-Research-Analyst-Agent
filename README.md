@@ -108,6 +108,33 @@ search and a [Google AI Studio](https://aistudio.google.com/apikey) key for Gemi
 python app.py               # Gradio UI at http://localhost:7860
 ```
 
+## Demo
+
+Ask a research question; the agent plans its sources, retrieves them in parallel,
+and returns a cited report. Real excerpt (*"What is retrieval-augmented generation
+and why is it used?"*):
+
+```text
+## Research Report: Retrieval-Augmented Generation (RAG) — Definition, Purpose, and Applications
+
+## Executive Summary
+This report provides a comprehensive analysis of Retrieval-Augmented Generation
+(RAG), a pivotal technique designed to enhance Large Language Models (LLMs). RAG
+is consistently defined across sources as ...
+```
+
+The full report also includes **Key Findings** (themed, with confidence levels),
+**Analysis** (agreements and conflicts across sources), **Limitations**, and
+formatted **Sources**.
+
+<!-- Add a screen recording once captured:  ![demo](docs/demo.gif)  -->
+_To add a demo GIF, see [`docs/RECORD_DEMO.md`](docs/RECORD_DEMO.md)._
+
+**Deploying:** it's a standard Gradio app and runs on **Hugging Face Spaces**
+(`app.py` + `requirements.txt`). A public demo on a free Gemini key rate-limits
+quickly (~20 req/day), so a recorded walkthrough is the more reliable portfolio
+artifact.
+
 ## Testing
 
 ```bash
