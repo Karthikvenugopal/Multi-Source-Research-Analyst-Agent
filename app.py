@@ -37,10 +37,10 @@ class ResearchApp:
             # Get metrics
             quality_score = result.get('research_quality_score', 0.0)
             sources_used = result.get('sources_used', [])
-            iterations = result.get('iterations', 0)
-            
+            num_findings = len(result.get('research_findings', []))
+
             # Format the enhanced response
-            response = self._format_enhanced_report(question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues)
+            response = self._format_enhanced_report(question, result, duration, quality_score, sources_used, num_findings, evaluation, quality_passed, quality_issues)
             
             progress(1.0, desc="Research complete!")
             return response
@@ -48,7 +48,7 @@ class ResearchApp:
         except Exception as e:
             return f"❌ **Error processing your request:** {str(e)}"
     
-    def _format_enhanced_report(self, question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues):
+    def _format_enhanced_report(self, question, result, duration, quality_score, sources_used, num_findings, evaluation, quality_passed, quality_issues):
         """Format the research report with enhanced styling"""
         
         # Quality status indicator
@@ -60,7 +60,7 @@ class ResearchApp:
 
 ## 📊 Research Metrics
 - **⏱️ Duration:** {duration} seconds
-- **🔄 Iterations:** {iterations}
+- **📑 Findings gathered:** {num_findings}
 - **📈 Quality Score:** {quality_score:.2f}/1.0
 - **📚 Sources Used:** {', '.join(sources_used) if sources_used else 'None'}
 - **🎯 Overall Score:** {evaluation['overall_score']:.2f}/1.0
