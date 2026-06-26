@@ -61,7 +61,6 @@ def run_demo():
             # Display results
             print(f"✅ Research completed in {result['duration']:.2f} seconds")
             print(f"📊 Quality Score: {result.get('research_quality_score', 0):.2f}/1.0")
-            print(f"🔄 Iterations: {result.get('iterations', 0)}")
             print(f"📚 Sources: {', '.join(result.get('sources_used', []))}")
             print(f"📖 Findings: {len(result.get('research_findings', []))}")
             print(f"🎯 Overall Score: {evaluation['overall_score']:.2f}/1.0")
@@ -125,7 +124,6 @@ def run_quick_demo():
         
         print(f"✅ Research completed in {end_time - start_time:.2f} seconds")
         print(f"📊 Quality Score: {result.get('research_quality_score', 0):.2f}/1.0")
-        print(f"🔄 Iterations: {result.get('iterations', 0)}")
         print(f"📚 Sources: {', '.join(result.get('sources_used', []))}")
         print(f"📖 Findings: {len(result.get('research_findings', []))}")
         
