@@ -1,3 +1,4 @@
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Literal
 
@@ -92,7 +93,8 @@ Research Question: {question}
 
 Analysis: {analysis}
 
-Sources: {sources}
+Numbered sources (cite these by their number):
+{sources}
 
 Create a well-structured report with:
 
@@ -121,9 +123,12 @@ Create a well-structured report with:
 - Summary of main findings
 - Implications and recommendations
 
-## Sources
-- Properly formatted citations
-- Source reliability assessment
+CITATIONS (important):
+- Support every substantive claim with an inline citation in square brackets that
+  refers to the numbered sources above, e.g. "RAG reduces hallucination [1][3]."
+- Only cite source numbers that appear in the list; never invent sources or URLs.
+- Do NOT write your own Sources or References section — a canonical, clickable
+  reference list is appended automatically.
 
 Maintain a professional, objective tone throughout. Use clear headings and logical flow."""),
             ("human", "Please create the final research report.")
@@ -222,7 +227,8 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
 
     def report_node(self, state):
         """Generate the final cited report."""
-        sources = self._format_sources_for_citation(state['research_findings'])
+        findings = state['research_findings']
+        sources = self._format_sources_for_citation(findings)
 
         prompt = self.report_prompt.format(
             question=state['question'],
@@ -241,6 +247,14 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
         except Exception as e:
             print(f"❌ Error in report generation: {e}")
             report = f"Error in report generation: {str(e)}"
+
+        # Turn the writer's inline [n] markers into links that jump to the
+        # matching reference, then append the canonical reference list (with the
+        # anchor targets) built from the real findings.
+        report = self._link_citations(report, findings)
+        references = self._format_references(findings)
+        if references:
+            report = f"{report.rstrip()}\n\n{references}"
         return {"report": report, "next_node": "finish"}
 
     # --- helpers ------------------------------------------------------------
@@ -287,3 +301,37 @@ Maintain a professional, objective tone throughout. Use clear headings and logic
                 citations.append(f"{i}. {title} - {source.upper()}")
 
         return "\n".join(citations)
+
+    def _link_citations(self, report: str, findings: List[Dict[str, Any]]) -> str:
+        """Turn inline [n] markers into links that jump to reference n.
+
+        Only numbers within the reference range are linked, so stray brackets in
+        the prose (e.g. a year like [2023]) are left untouched.
+        """
+        valid = set(range(1, len(findings) + 1))
+
+        def repl(match):
+            n = int(match.group(1))
+            return f"[[{n}]](#ref-{n})" if n in valid else match.group(0)
+
+        return re.sub(r"\[(\d+)\]", repl, report)
+
+    def _format_references(self, findings: List[Dict[str, Any]]) -> str:
+        """Canonical, numbered reference list appended to every report.
+
+        Each entry carries an ``<a id="ref-n">`` anchor so the inline [n]
+        citations in the body link straight down to it. Titles link to the URL.
+        """
+        if not findings:
+            return ""
+
+        lines = ["## References", ""]
+        for i, finding in enumerate(findings, 1):
+            title = finding.get('title', 'Untitled')
+            source = finding.get('source', 'unknown').upper()
+            url = finding.get('url', '')
+            label = f"[{title}]({url})" if url else title
+            # Anchor target + visible number, its own paragraph so the jump lands cleanly.
+            lines.append(f'<a id="ref-{i}"></a>**[{i}]** {label} — {source}')
+            lines.append("")
+        return "\n".join(lines).rstrip()
