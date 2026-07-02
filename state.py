@@ -1,6 +1,5 @@
-from typing import TypedDict, List, Annotated, Dict, Any
-import operator
-from datetime import datetime
+from typing import TypedDict, List, Dict
+
 
 class ResearchFinding(TypedDict):
     source: str  # web, wikipedia, arxiv, etc.
@@ -9,15 +8,15 @@ class ResearchFinding(TypedDict):
     confidence: float  # 0-1 confidence score
     timestamp: str
 
-class AgentState(TypedDict):
+
+class AgentState(TypedDict, total=False):
     question: str
-    research_findings: List[ResearchFinding]  # Enhanced findings with metadata
-    analysis: str  # The LLM's synthesis of the findings
-    report: str  # The final, formatted answer
-    iterations: Annotated[int, operator.add]  # Tracks how many loops it's done
-    next_node: str  # The next node to execute
-    research_quality_score: float  # Overall quality of research (0-1)
-    sources_used: List[str]  # Track which sources have been used
-    max_iterations_reached: bool  # Safety flag
-    start_time: str  # When research started
-    current_focus: str  # What aspect of the question we're currently researching
+    research_plan: List[Dict[str, str]]  # planner output: [{source, query}, ...]
+    research_findings: List[ResearchFinding]  # findings with metadata
+    analysis: str  # the LLM's synthesis of the findings
+    report: str  # the final, formatted answer
+    next_node: str  # trace of the next node (linear graph; informational)
+    research_quality_score: float  # overall quality of research (0-1)
+    sources_used: List[str]  # which sources contributed findings
+    start_time: str  # when research started
+    current_focus: str  # what aspect of the question is in focus

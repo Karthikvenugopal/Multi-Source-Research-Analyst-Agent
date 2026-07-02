@@ -6,6 +6,23 @@ Supports multiple free and paid LLM providers
 from typing import Optional, Dict, Any
 import os
 from config import Config
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+
+def gemini_rate_limiter(model: str) -> InMemoryRateLimiter:
+    """Token-bucket limiter that keeps us under Gemini free-tier per-minute caps.
+
+    Free tier is roughly 10 requests/min for flash-lite and 5 for flash; pace
+    safely under those so request bursts never trigger 429s (which, with retries,
+    would also burn through the daily quota).
+    """
+    per_minute = 8 if "flash-lite" in model else 4
+    return InMemoryRateLimiter(
+        requests_per_second=per_minute / 60.0,
+        check_every_n_seconds=0.5,
+        max_bucket_size=1,
+    )
+
 
 class LLMManager:
     """Manages different LLM providers with fallback options"""
@@ -77,14 +94,17 @@ class LLMManager:
             if not Config.GOOGLE_API_KEY:
                 raise ValueError("GOOGLE_API_KEY not found in environment")
             
-            # Use the correct model name for current API
-            model_name = "gemini-1.5-flash" if self.model == "gemini-pro" else self.model
+            # Migrate retired model aliases to a current model name
+            legacy_models = {"gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"}
+            model_name = "gemini-2.5-flash" if self.model in legacy_models else self.model
             
             print(f"🔍 Initializing Google Gemini model: {model_name}")
             llm = ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=Config.GOOGLE_API_KEY,
-                temperature=0.7
+                temperature=0.7,
+                max_retries=0,  # rate limiter prevents 429s; retries would waste daily quota
+                rate_limiter=gemini_rate_limiter(model_name),
             )
             print("✅ Google Gemini model loaded successfully")
             return llm
@@ -169,7 +189,8 @@ FREE_MODELS = {
         "facebook/blenderbot-90M"
     ],
     "google": [
-        "gemini-pro"  # Requires free API key
+        "gemini-2.5-flash",  # Requires free API key
+        "gemini-2.5-pro"
     ]
 }
 
@@ -184,10 +205,10 @@ def get_free_setup_instructions():
    - Set in .env: LLM_MODEL=microsoft/DialoGPT-medium
 
 2. 🔍 Google Gemini (Free with API Key):
-   - Get free API key: https://makersuite.google.com/app/apikey
+   - Get free API key: https://aistudio.google.com/apikey
    - Install: pip install langchain-google-genai
    - Set in .env: LLM_PROVIDER=google
-   - Set in .env: LLM_MODEL=gemini-pro
+   - Set in .env: LLM_MODEL=gemini-2.5-flash
    - Set in .env: GOOGLE_API_KEY=your_key_here
 
 3. 🤖 OpenAI (Paid):

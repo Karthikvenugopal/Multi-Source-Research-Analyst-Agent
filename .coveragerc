@@ -1,0 +1,7 @@
+[run]
+omit =
+    venv/*
+    tests/*
+    # Entry-point scripts (not unit-tested)
+    app.py
+    demo.py

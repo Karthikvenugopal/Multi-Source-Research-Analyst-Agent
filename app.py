@@ -10,45 +10,70 @@ class ResearchApp:
         self.research_graph = ResearchGraph()
         self.evaluator = ResearchEvaluator()
     
-    def research_query(self, question, progress=gr.Progress()):
-        """Process a research question and return the result with progress tracking"""
+    # Friendly status shown in the output pane while each stage runs.
+    _STAGE_MESSAGES = {
+        "planner": "🧭 Planning which sources to consult…",
+        "gather": "🔎 Gathering evidence from the web, Wikipedia, and ArXiv…",
+        "synthesize": "🧠 Synthesizing findings and reconciling conflicts…",
+        "report": "📝 Writing the cited report…",
+    }
+
+    @staticmethod
+    def _waiting(message):
+        """A visible 'in progress' card so the user knows work is happening."""
+        return (
+            "### ⏳ Researching…\n\n"
+            f"{message}\n\n"
+            "_This usually takes about a minute — it queries several live "
+            "sources and an LLM. Please keep this tab open._"
+        )
+
+    def research_query(self, question):
+        """Stream staged progress, then the final report, for a research question."""
+        if not question or not question.strip():
+            yield "⚠️ Please enter a research question to get started."
+            return
+
         start_time = time.time()
-        
+        # Immediate feedback the moment Submit is clicked, before any slow work.
+        yield self._waiting("Starting up…")
+
         try:
-            progress(0.1, desc="Initializing research...")
-            
-            # Run the research graph
-            result = self.research_graph.run(question)
-            
-            progress(0.9, desc="Generating final report...")
-            end_time = time.time()
-            
-            # Calculate metrics
-            duration = round(end_time - start_time, 2)
-            result['duration'] = duration  # Add duration to result
-            
-            # Perform quality checks
+            # Stream the pipeline so each completed stage updates the UI.
+            final_state = None
+            for node_name, state in self.research_graph.stream(question):
+                final_state = state
+                message = self._STAGE_MESSAGES.get(node_name)
+                if message:
+                    yield self._waiting(message)
+
+            if not final_state:
+                yield "❌ **Error:** the research pipeline returned no result."
+                return
+
+            duration = round(time.time() - start_time, 2)
+            result = dict(final_state)
+            result['duration'] = duration
+
+            # Quality checks and evaluation
             quality_passed, quality_issues = check_research_quality(result)
-            validation_passed = validate_research_output(result)
-            
-            # Evaluate the research session
+            validate_research_output(result)
             evaluation = self.evaluator.evaluate_research_session(result, question)
-            
-            # Get metrics
+
+            # Metrics
             quality_score = result.get('research_quality_score', 0.0)
             sources_used = result.get('sources_used', [])
-            iterations = result.get('iterations', 0)
-            
-            # Format the enhanced response
-            response = self._format_enhanced_report(question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues)
-            
-            progress(1.0, desc="Research complete!")
-            return response
-            
+            num_findings = len(result.get('research_findings', []))
+
+            yield self._format_enhanced_report(
+                question, result, duration, quality_score, sources_used,
+                num_findings, evaluation, quality_passed, quality_issues,
+            )
+
         except Exception as e:
-            return f"❌ **Error processing your request:** {str(e)}"
+            yield f"❌ **Error processing your request:** {str(e)}"
     
-    def _format_enhanced_report(self, question, result, duration, quality_score, sources_used, iterations, evaluation, quality_passed, quality_issues):
+    def _format_enhanced_report(self, question, result, duration, quality_score, sources_used, num_findings, evaluation, quality_passed, quality_issues):
         """Format the research report with enhanced styling"""
         
         # Quality status indicator
@@ -60,7 +85,7 @@ class ResearchApp:
 
 ## 📊 Research Metrics
 - **⏱️ Duration:** {duration} seconds
-- **🔄 Iterations:** {iterations}
+- **📑 Findings gathered:** {num_findings}
 - **📈 Quality Score:** {quality_score:.2f}/1.0
 - **📚 Sources Used:** {', '.join(sources_used) if sources_used else 'None'}
 - **🎯 Overall Score:** {evaluation['overall_score']:.2f}/1.0
@@ -125,38 +150,75 @@ class ResearchApp:
 # Create the enhanced interface
 app = ResearchApp()
 
-# Define the interface with better styling
-iface = gr.Interface(
-    fn=app.research_query,
-    inputs=[
-        gr.Textbox(
-            label="🔍 Research Question", 
-            lines=3, 
-            placeholder="Enter your research question here...\n\nExamples:\n• What are the latest developments in quantum computing?\n• Compare renewable energy policies in different countries\n• What are the competing theories about dark matter?",
-            info="Ask any research question and the agent will gather information from multiple sources."
-        )
-    ],
-    outputs=gr.Markdown(label="📊 Research Report"),
-    title="🤖 Multi-Source Research Analyst Agent",
-    description="""
-    An intelligent AI agent that autonomously researches topics using multiple sources (web, Wikipedia, academic papers) 
-    and synthesizes comprehensive reports with citations and confidence scores.
-    
-    **Features:**
-    - 🔄 Autonomous decision-making and iterative research
-    - 📚 Multi-source information gathering
-    - 🧠 Intelligent synthesis of conflicting information
-    - 📊 Quality scoring and confidence metrics
-    - 📝 Professional report generation with citations
-    """,
+# A single full-width vertical layout (gr.Blocks) — the old gr.Interface put the
+# report in a narrow right-hand column, which looked off-center.
+EXAMPLE_QUESTIONS = [
+    "What is retrieval-augmented generation and why is it used?",
+    "How do solar and wind energy compare in cost and reliability?",
+    "What are the latest developments in quantum error correction?",
+]
+
+_IDLE_REPORT = "_Your research report will appear here. Enter a question above and click **Research**._"
+
+# Keep the app a centered, readable column instead of stretching full-browser-width,
+# and hide the default Gradio footer for a cleaner portfolio look.
+CUSTOM_CSS = """
+.gradio-container { max-width: 860px !important; margin: 0 auto !important; }
+footer { display: none !important; }
+"""
+
+with gr.Blocks(
     theme=gr.themes.Soft(),
-    allow_flagging="never"
-)
+    title="Multi-Source Research Analyst Agent",
+    css=CUSTOM_CSS,
+) as iface:
+    gr.Markdown(
+        """
+        # 🤖 Multi-Source Research Analyst Agent
+
+        An AI agent that autonomously researches a question across multiple sources
+        (web, Wikipedia, academic papers) and synthesizes a **cited** report.
+
+        **How it works:** it plans which sources to consult, gathers from them in
+        parallel, then synthesizes the findings into a report with confidence scores.
+
+        ⏱️ **Each question takes about a minute** — it makes live source and LLM
+        calls, and you'll see live progress below while it runs.
+        """
+    )
+
+    question = gr.Textbox(
+        label="🔍 Research Question",
+        lines=3,
+        placeholder="Enter your research question here…",
+        info="Ask any research question and the agent will gather information from multiple sources.",
+    )
+
+    with gr.Row():
+        submit_btn = gr.Button("🔎 Research", variant="primary")
+        clear_btn = gr.Button("Clear")
+
+    gr.Examples(examples=EXAMPLE_QUESTIONS, inputs=question, label="Example questions")
+
+    report = gr.Markdown(value=_IDLE_REPORT, label="📊 Research Report", elem_id="report")
+
+    # show_progress="hidden": suppress Gradio's pulsing overlay bar, which faded in
+    # and out on top of the report and covered our own "Researching…" status. The
+    # generator streams visible status text instead, so no overlay is needed.
+    submit_btn.click(fn=app.research_query, inputs=question, outputs=report, show_progress="hidden")
+    question.submit(fn=app.research_query, inputs=question, outputs=report, show_progress="hidden")
+    clear_btn.click(lambda: ("", _IDLE_REPORT), outputs=[question, report])
 
 if __name__ == "__main__":
+    import os
+
+    # Honor GRADIO_SERVER_PORT if set; otherwise let Gradio find a free port
+    # starting at 7860, so a stale instance doesn't crash startup with an
+    # unhelpful "Cannot find empty port" traceback.
+    port_env = os.environ.get("GRADIO_SERVER_PORT")
     iface.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=int(port_env) if port_env else None,
         share=False,
-        show_error=True
+        show_error=True,
     )

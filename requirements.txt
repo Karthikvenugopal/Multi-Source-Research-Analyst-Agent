@@ -1,18 +1,22 @@
-langchain
-langgraph
-tavily-python
-wikipedia-api
-arxiv
-python-dotenv
-gradio
+# Core dependencies
+langchain==0.3.27
+langchain-core==0.3.75
+langchain-community==0.3.29
+langgraph==0.6.6
+tavily-python==0.7.12
+wikipedia==1.4.0
+arxiv==2.2.0
+python-dotenv==1.1.1
+gradio==5.45.0
 
-# Free LLM providers (choose one or more)
-langchain-huggingface
-transformers
-torch
+# Default LLM provider: Google Gemini (free with an API key)
+langchain-google-genai==2.1.12
 
-# Optional: Google Gemini (free with API key)
-langchain-google-genai
+# Optional: OpenAI (paid). Install if you set LLM_PROVIDER=openai.
+# langchain-openai==0.3.32
 
-# Optional: OpenAI (paid)
-langchain-openai
+# Optional: local HuggingFace models (experimental, heavy ~GBs).
+# Install if you set LLM_PROVIDER=huggingface.
+# langchain-huggingface==0.3.1
+# transformers==4.56.2
+# torch==2.8.0
