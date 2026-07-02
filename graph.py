@@ -26,9 +26,8 @@ class ResearchGraph:
 
         self.compiled_graph = self.graph.compile()
 
-    def run(self, question: str):
-        """Run the pipeline for a single question."""
-        initial_state = {
+    def _initial_state(self, question: str) -> dict:
+        return {
             "question": question,
             "research_findings": [],
             "research_plan": [],
@@ -41,4 +40,19 @@ class ResearchGraph:
             "current_focus": "Initial research",
         }
 
-        return self.compiled_graph.invoke(initial_state)
+    def run(self, question: str):
+        """Run the pipeline for a single question."""
+        return self.compiled_graph.invoke(self._initial_state(question))
+
+    def stream(self, question: str):
+        """Run the pipeline, yielding (node_name, full_state) after each node.
+
+        Executes exactly the same nodes as run() with the same LLM-call count;
+        it just surfaces the intermediate state so a UI can show live progress.
+        """
+        state = self._initial_state(question)
+        for update in self.compiled_graph.stream(state, stream_mode="updates"):
+            for node_name, delta in update.items():
+                if isinstance(delta, dict):
+                    state = {**state, **delta}
+                yield node_name, state
