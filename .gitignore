@@ -195,3 +195,10 @@ credentials/
 *.tar.gz
 *.rar
 *.7z
+
+# Raw screen recordings — keep the source video out of git; commit only the
+# optimized docs/demo.gif that gets embedded in the README.
+*.mov
+*.mp4
+*.webm
+Screen Recording *.mov

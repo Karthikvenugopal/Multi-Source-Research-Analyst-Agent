@@ -4,6 +4,12 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+![LangGraph](https://img.shields.io/badge/LangGraph-agent-1C3C3C)
+![Google Gemini](https://img.shields.io/badge/LLM-Gemini-4285F4)
+![Gradio](https://img.shields.io/badge/UI-Gradio-F97316)
+![Tavily](https://img.shields.io/badge/search-Tavily-6366F1)
+![pytest](https://img.shields.io/badge/tested-pytest-0A9EDC)
+
 An autonomous research agent built with **LangGraph**. Given a question, it decides
 which sources to consult (web, Wikipedia, academic papers), gathers evidence across
 them, and synthesizes a single cited report — and its output quality is measured by
@@ -110,8 +116,11 @@ python app.py               # Gradio UI at http://localhost:7860
 
 ## Demo
 
+![The agent planning its sources, streaming progress, and returning a cited report](docs/demo.gif)
+
 Ask a research question; the agent plans its sources, retrieves them in parallel,
-and returns a cited report. Real excerpt (*"What is retrieval-augmented generation
+and returns a **cited** report — the inline `[n]` markers link down to a numbered,
+clickable reference list. Real excerpt (*"What is retrieval-augmented generation
 and why is it used?"*):
 
 ```text
@@ -126,9 +135,6 @@ is consistently defined across sources as ...
 The full report also includes **Key Findings** (themed, with confidence levels),
 **Analysis** (agreements and conflicts across sources), **Limitations**, and
 formatted **Sources**.
-
-<!-- Add a screen recording once captured:  ![demo](docs/demo.gif)  -->
-_To add a demo GIF, see [`docs/RECORD_DEMO.md`](docs/RECORD_DEMO.md)._
 
 **Deploying:** it's a standard Gradio app and runs on **Hugging Face Spaces**
 (`app.py` + `requirements.txt`). A public demo on a free Gemini key rate-limits
