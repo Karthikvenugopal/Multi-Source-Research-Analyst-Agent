@@ -5,3 +5,7 @@ omit =
     # Entry-point scripts (not unit-tested)
     app.py
     demo.py
+
+[report]
+fail_under = 75
+show_missing = true

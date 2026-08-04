@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 from agent.models import ResearchDecision, ResearchRequirements
 from agent.policies import RuntimeLimits
@@ -243,3 +244,18 @@ def test_disabling_a_bundle_does_not_crash_runtime():
     assert result["stop_reason"] == "iteration_limit"
     assert result["tool_calls"] == 0
     assert "Insufficient Evidence" in result["report"]
+
+
+def test_tool_timeout_is_handled_as_a_failed_call():
+    def slow_rows(query):
+        time.sleep(0.05)
+        return [{"title": "late", "url": "u", "content": "arrived too late"}]
+
+    model = ScriptedModel([search("web", "slow"), finish()])
+    result = runtime(
+        model,
+        [make_bundle("web", rows=slow_rows)],
+        tool_timeout_seconds=0.01,
+    ).run("timeout")
+    assert result["stop_reason"] == "all_tools_failed"
+    assert "TimeoutError" in result["tool_call_history"][0]["error"]

@@ -244,7 +244,15 @@ def check_research_quality(result: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if not result.get('report'):
         issues.append("No final report generated")
     
-    # Check quality scores
+    if result.get("mode") == "agentic":
+        verification = result.get("verification_result", {})
+        if verification and not verification.get("is_valid", False):
+            issues.append("Deterministic citation verification failed")
+        if result.get("stop_reason") not in {"evidence_sufficient", None}:
+            issues.append(f"Research stopped with: {result.get('stop_reason')}")
+        return len(issues) == 0, issues
+
+    # Check quality scores (legacy v1 heuristic only)
     quality_score = result.get('research_quality_score', 0)
     if quality_score < 0.3:
         issues.append(f"Low quality score: {quality_score:.2f}")
@@ -262,6 +270,12 @@ def check_research_quality(result: Dict[str, Any]) -> Tuple[bool, List[str]]:
 
 def validate_research_output(result: Dict[str, Any]) -> bool:
     """Validate that research output meets minimum standards"""
+    if result.get("mode") == "agentic":
+        verification = result.get("verification_result", {})
+        return bool(result.get("question") and result.get("report")) and (
+            not verification or verification.get("is_valid", False)
+        )
+
     required_fields = ['question', 'research_findings', 'analysis', 'report']
     
     for field in required_fields:

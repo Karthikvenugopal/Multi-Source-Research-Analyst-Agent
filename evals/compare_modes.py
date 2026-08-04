@@ -142,11 +142,19 @@ class _OfflineModel:
             ResearchDecision(
                 action="search",
                 bundle=bundle,
-                query=" ".join(topics)[:120],
-                action_summary=f"Fixture selects expected {bundle} capability.",
+                query=(
+                    " ".join(topics)
+                    if index == 0
+                    else f"{' '.join(topics)} corroborating evidence"
+                )[:120],
+                action_summary=(
+                    f"Fixture selects expected {bundle} capability."
+                    if index == 0
+                    else f"The first fixture source left a cross-source gap; refine with {bundle}."
+                ),
                 unresolved_gaps=["Inspect fixture evidence."],
             )
-            for bundle in case.get("expected_bundles", [])
+            for index, bundle in enumerate(case.get("expected_bundles", []))
         ]
         self.decisions.append(ResearchDecision(
             action="finish",

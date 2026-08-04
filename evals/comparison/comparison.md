@@ -1,6 +1,6 @@
 # Legacy versus agentic comparison
 
-_Generated 2026-08-04T16:53:27+00:00 · hermetic fixture architecture benchmark; no live retrieval or model grading · 24 questions._
+_Generated 2026-08-04T16:58:33+00:00 · hermetic fixture architecture benchmark; no live retrieval or model grading · 24 questions._
 
 Faithfulness and relevance are deterministic lexical proxies unless the label explicitly says a live model judge was used.
 
