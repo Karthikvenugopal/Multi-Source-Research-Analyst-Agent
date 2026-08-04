@@ -58,6 +58,30 @@ class LegacyResearchGraph:
                 yield node_name, state
 
 
-# Backwards-compatible alias. The facade becomes agentic-by-default in phase 2;
-# callers can already pin the historical implementation explicitly.
-ResearchGraph = LegacyResearchGraph
+class ResearchGraph:
+    """Mode-selecting facade; agentic is default and legacy preserves v1."""
+
+    def __init__(self, mode: str = "agentic", runtime=None):
+        if mode not in {"agentic", "legacy"}:
+            raise ValueError("mode must be 'agentic' or 'legacy'")
+        self.mode = mode
+        if mode == "legacy":
+            self.implementation = LegacyResearchGraph()
+        else:
+            if runtime is None:
+                from agent.runtime import ResearchAgentRuntime
+
+                runtime = ResearchAgentRuntime()
+            self.implementation = runtime
+
+    def run(self, question: str):
+        """Run the selected research mode."""
+        return self.implementation.run(question)
+
+    def stream(self, question: str):
+        """Yield compatible progress updates for either implementation."""
+        if self.mode == "legacy":
+            yield from self.implementation.stream(question)
+            return
+        result = self.implementation.run(question)
+        yield "agentic_research", result
