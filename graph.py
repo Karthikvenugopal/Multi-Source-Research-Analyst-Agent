@@ -80,7 +80,7 @@ class ResearchGraph:
 
     def stream(self, question: str):
         """Yield compatible progress updates for either implementation."""
-        if self.mode == "legacy":
+        if hasattr(self.implementation, "stream"):
             yield from self.implementation.stream(question)
             return
         result = self.implementation.run(question)

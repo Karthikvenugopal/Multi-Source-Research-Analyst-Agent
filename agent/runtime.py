@@ -9,11 +9,12 @@ from typing import Any
 
 from agent.models import LangChainResearchModel, ResearchDecision, ResearchModel
 from agent.policies import HeuristicFallbackPolicy, RuntimeLimits
-from agent.state import RuntimeState
+from agent.state import RuntimeGraphState, RuntimeState
 from evidence.citations import CitationVerifier, render_references
 from evidence.conflicts import ConflictDetector
 from evidence.selector import EvidenceSelector
 from llm_manager import LLMManager
+from langgraph.graph import END, StateGraph
 from tool_bundles.base import ToolBundle
 from tool_bundles.registry import ToolBundleRegistry, build_default_registry
 
@@ -36,24 +37,66 @@ class ResearchAgentRuntime:
         )
         self.conflict_detector = ConflictDetector()
         self.citation_verifier = CitationVerifier()
+        self.compiled_graph = self._build_graph()
 
     def run(self, question: str) -> dict[str, Any]:
         """Research one question within deterministic limits and return a traceable result."""
         normalized_question = " ".join(question.split()).strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
-        state = RuntimeState(question=normalized_question)
-        started = time.monotonic()
-        state.requirements = self._analyze(normalized_question)
-        state.unresolved_gaps = list(state.requirements.requirements)
+        graph_state: RuntimeGraphState = {
+            "session": RuntimeState(question=normalized_question),
+            "started": time.monotonic(),
+        }
+        completed = self.compiled_graph.invoke(graph_state)
+        return completed["result"]
 
+    def stream(self, question: str):
+        """Yield each high-level LangGraph stage with a public state snapshot."""
+        normalized_question = " ".join(question.split()).strip()
+        if not normalized_question:
+            raise ValueError("question must not be empty")
+        graph_state: RuntimeGraphState = {
+            "session": RuntimeState(question=normalized_question),
+            "started": time.monotonic(),
+        }
+        for update in self.compiled_graph.stream(graph_state, stream_mode="updates"):
+            for node_name, delta in update.items():
+                graph_state.update(delta)
+                snapshot = delta.get("result") or graph_state["session"].to_result()
+                yield node_name, snapshot
+
+    def _build_graph(self):
+        """Build a small graph around the dynamic, registry-driven tool loop."""
+        graph = StateGraph(RuntimeGraphState)
+        graph.add_node("understand", self._understand_stage)
+        graph.add_node("research", self._research_stage)
+        graph.add_node("report_verify", self._report_stage)
+        graph.set_entry_point("understand")
+        graph.add_edge("understand", "research")
+        graph.add_edge("research", "report_verify")
+        graph.add_edge("report_verify", END)
+        return graph.compile()
+
+    def _understand_stage(self, graph_state: RuntimeGraphState) -> dict[str, Any]:
+        session = graph_state["session"]
+        session.requirements = self._analyze(session.question)
+        session.unresolved_gaps = list(session.requirements.requirements)
+        return {"session": session}
+
+    def _research_stage(self, graph_state: RuntimeGraphState) -> dict[str, Any]:
+        session = graph_state["session"]
         if not self.registry.bundles:
-            state.stop_reason = "all_tools_failed"
+            session.stop_reason = "all_tools_failed"
         else:
-            self._research_loop(state, started)
-        self._generate_and_verify(state)
-        state.elapsed_time = round(time.monotonic() - started, 4)
-        return state.to_result()
+            self._research_loop(session, graph_state["started"])
+        return {"session": session}
+
+    def _report_stage(self, graph_state: RuntimeGraphState) -> dict[str, Any]:
+        session = graph_state["session"]
+        self._generate_and_verify(session)
+        session.elapsed_time = round(time.monotonic() - graph_state["started"], 4)
+        return {"session": session, "result": session.to_result()}
 
     def _research_loop(self, state: RuntimeState, started: float) -> None:
         consecutive_no_new = 0

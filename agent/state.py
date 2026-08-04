@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from agent.models import ResearchRequirements
 from evidence.ledger import EvidenceLedger
@@ -76,3 +76,11 @@ class RuntimeState:
             "sources_used": sorted({row["source_type"] for row in evidence}),
             "research_quality_score": 0.0,
         }
+
+
+class RuntimeGraphState(TypedDict, total=False):
+    """Small LangGraph envelope around a mutable research session."""
+
+    session: RuntimeState
+    started: float
+    result: dict[str, Any]

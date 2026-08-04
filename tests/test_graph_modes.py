@@ -17,7 +17,7 @@ class FakeRunner:
 def test_agentic_mode_delegates_to_injected_runtime():
     graph = graph_module.ResearchGraph(mode="agentic", runtime=FakeRunner("agentic"))
     assert graph.run("q")["mode"] == "agentic"
-    assert list(graph.stream("q"))[0][0] == "agentic_research"
+    assert list(graph.stream("q"))[0][0] == "done"
 
 
 def test_legacy_mode_remains_available(monkeypatch):

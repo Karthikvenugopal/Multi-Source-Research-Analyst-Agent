@@ -47,19 +47,25 @@ Legacy mode preserves the original LangGraph nodes:
                        Web · Wikipedia · ArXiv
 ```
 
-Agentic mode moves source routing into a top-level model-directed loop. Source order
-is not encoded in the runtime:
+Agentic mode uses a small three-stage LangGraph around a top-level model-directed
+loop. Source order is not encoded in the graph or runtime:
 
 ```text
 User question
      │
      ▼
-Requirements + research agent
+Understand stage
+     │
+     ▼
+Bounded research agent
      │
      ├── choose Tool Bundle + tailored query
      ├── inspect selected evidence passages
      ├── track gaps and likely conflicts
      └── repeat or stop
+             │
+             ▼
+      Report/verify stage
              │
              ▼
       Evidence-only report

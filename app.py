@@ -15,7 +15,9 @@ class ResearchApp:
     """Lazy mode-aware UI adapter around :class:`ResearchGraph`."""
 
     _STAGE_MESSAGES = {
-        "agentic_research": "Inspecting evidence, iterating when justified, and verifying citations…",
+        "understand": "Identifying the question's research requirements…",
+        "research": "Inspecting evidence and searching again when justified…",
+        "report_verify": "Writing the report and verifying every citation…",
         "planner": "Planning the legacy single-pass search…",
         "gather": "Gathering legacy source results…",
         "synthesize": "Synthesizing the legacy findings…",
