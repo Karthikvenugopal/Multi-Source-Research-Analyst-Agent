@@ -41,11 +41,11 @@ def _mean(values: List[float]) -> float:
 
 
 def run(dataset: Path, out_dir: Path, limit: int | None,
-        judge_model: str | None = None) -> Dict[str, Any]:
+        judge_model: str | None = None, mode: str = "agentic") -> Dict[str, Any]:
     from config import Config
 
     questions = load_questions(dataset, limit)
-    agent = ResearchGraph()
+    agent = ResearchGraph(mode=mode)
     judge = ReportJudge(model=judge_model)
     agent_model = Config.LLM_MODEL
 
@@ -102,6 +102,7 @@ def run(dataset: Path, out_dir: Path, limit: int | None,
         "agent_model": agent_model,
         "judge_model": judge.model,
         "dataset": str(dataset),
+        "mode": mode,
         "aggregate": aggregate,
         "results": per_question,
     }
@@ -161,8 +162,9 @@ def main() -> None:
                         help="Model for the judge (defaults to LLM_MODEL). Use a "
                              "different model than the agent to split free-tier "
                              "quota and reduce self-grading bias.")
+    parser.add_argument("--mode", choices=("legacy", "agentic"), default="agentic")
     args = parser.parse_args()
-    run(args.dataset, args.out, args.limit, judge_model=args.judge_model)
+    run(args.dataset, args.out, args.limit, judge_model=args.judge_model, mode=args.mode)
 
 
 if __name__ == "__main__":
