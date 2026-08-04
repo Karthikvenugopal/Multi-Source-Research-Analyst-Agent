@@ -6,7 +6,7 @@ from state import AgentState
 from nodes import AgentNodes
 
 
-class ResearchGraph:
+class LegacyResearchGraph:
     """Linear plan-execute pipeline: plan -> gather -> synthesize -> report."""
 
     def __init__(self):
@@ -56,3 +56,8 @@ class ResearchGraph:
                 if isinstance(delta, dict):
                     state = {**state, **delta}
                 yield node_name, state
+
+
+# Backwards-compatible alias. The facade becomes agentic-by-default in phase 2;
+# callers can already pin the historical implementation explicitly.
+ResearchGraph = LegacyResearchGraph
