@@ -152,6 +152,7 @@ data/
 
 # ...but keep the small, curated evaluation dataset
 !datasets/eval_questions.jsonl
+!evals/comparison/comparison.json
 
 # Logs
 logs/

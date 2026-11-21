@@ -6,7 +6,7 @@ from state import AgentState
 from nodes import AgentNodes
 
 
-class ResearchGraph:
+class LegacyResearchGraph:
     """Linear plan-execute pipeline: plan -> gather -> synthesize -> report."""
 
     def __init__(self):
@@ -56,3 +56,32 @@ class ResearchGraph:
                 if isinstance(delta, dict):
                     state = {**state, **delta}
                 yield node_name, state
+
+
+class ResearchGraph:
+    """Mode-selecting facade; agentic is default and legacy preserves v1."""
+
+    def __init__(self, mode: str = "agentic", runtime=None):
+        if mode not in {"agentic", "legacy"}:
+            raise ValueError("mode must be 'agentic' or 'legacy'")
+        self.mode = mode
+        if mode == "legacy":
+            self.implementation = LegacyResearchGraph()
+        else:
+            if runtime is None:
+                from agent.runtime import ResearchAgentRuntime
+
+                runtime = ResearchAgentRuntime()
+            self.implementation = runtime
+
+    def run(self, question: str):
+        """Run the selected research mode."""
+        return self.implementation.run(question)
+
+    def stream(self, question: str):
+        """Yield compatible progress updates for either implementation."""
+        if hasattr(self.implementation, "stream"):
+            yield from self.implementation.stream(question)
+            return
+        result = self.implementation.run(question)
+        yield "agentic_research", result

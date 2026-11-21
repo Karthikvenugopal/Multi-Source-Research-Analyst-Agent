@@ -103,7 +103,8 @@ class LLMManager:
                 model=model_name,
                 google_api_key=Config.GOOGLE_API_KEY,
                 temperature=0.7,
-                max_retries=0,  # rate limiter prevents 429s; retries would waste daily quota
+                retries=0,  # bounded runtime should observe provider failures promptly
+                request_timeout=Config.LLM_TIMEOUT_SECONDS,
                 rate_limiter=gemini_rate_limiter(model_name),
             )
             print("✅ Google Gemini model loaded successfully")
@@ -130,7 +131,9 @@ class LLMManager:
             llm = ChatOpenAI(
                 model=self.model,
                 openai_api_key=Config.OPENAI_API_KEY,
-                temperature=0.7
+                temperature=0.7,
+                request_timeout=Config.LLM_TIMEOUT_SECONDS,
+                max_retries=0,
             )
             print("✅ OpenAI model loaded successfully")
             return llm

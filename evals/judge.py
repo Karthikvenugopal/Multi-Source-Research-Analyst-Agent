@@ -92,7 +92,8 @@ class ReportJudge:
             model=self.model,
             google_api_key=Config.GOOGLE_API_KEY,
             temperature=0,
-            max_retries=0,  # rate limiter prevents 429s; retries would waste daily quota
+            retries=0,
+            request_timeout=Config.LLM_TIMEOUT_SECONDS,
             rate_limiter=gemini_rate_limiter(self.model),
         )
         # Structured output guarantees we get parseable, in-range scores back.

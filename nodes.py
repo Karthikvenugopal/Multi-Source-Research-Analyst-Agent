@@ -2,10 +2,9 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Literal
 
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from config import Config
 from tools import ResearchTools
 from llm_manager import LLMManager
 
